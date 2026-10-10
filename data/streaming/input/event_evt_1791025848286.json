@@ -1,0 +1,1 @@
+{"timestamp": "2026-10-03 16:40:48", "segment_id": "SEG_I94_EB", "road_name": "I-94 Eastbound", "source_node": "DOWNTOWN_MPLS", "target_node": "DOWNTOWN_STP", "speed_limit_kmh": 90.0, "capacity_vph": 4800.0, "traffic_volume": 4216, "average_speed": 80.1, "occupancy": 0.351, "temperature_c": 18.5, "weather_main": "Clear", "event_id": "evt_1791025848286"}

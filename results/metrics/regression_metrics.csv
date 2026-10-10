@@ -1,0 +1,4 @@
+rmse,mae,r2_score,model
+0.104,0.085,0.9998,LinearRegression
+0.568,0.27,0.994,GBTRegressor
+1.314,0.901,0.9678,RandomForestRegressor

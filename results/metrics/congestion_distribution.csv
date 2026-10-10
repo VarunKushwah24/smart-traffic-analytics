@@ -1,0 +1,4 @@
+congestion_level,count,avg_speed,avg_volume,percentage
+LOW,6714,91.3,1250.4,83.26
+MEDIUM,1344,87.2,2765.0,16.67
+HIGH,6,80.2,3403.0,0.07

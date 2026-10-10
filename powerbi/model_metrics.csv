@@ -1,0 +1,6 @@
+accuracy,precision,recall,f1_score,model
+0.9883,0.9879,0.9883,0.9881,GBTClassifier
+0.9871,0.9866,0.9871,0.9868,RandomForestClassifier
+0.9825,0.9824,0.9825,0.9824,DecisionTreeClassifier
+0.9786,0.9778,0.9786,0.9782,LogisticRegression
+0.8706,0.9371,0.8706,0.9024,NaiveBayes

@@ -1,0 +1,2 @@
+timestamp,segment_id,road_name,source_node,target_node,speed_limit_kmh,capacity_vph,traffic_volume,average_speed,occupancy,temperature_c,weather_main,event_id,event_time,hour,day_of_week,is_rush_hour,speed_ratio,vc_ratio,predicted_congestion,alert_status,processed_time
+2026-10-03 16:40:48,SEG_I94_EB,I-94 Eastbound,DOWNTOWN_MPLS,DOWNTOWN_STP,90.0,4800.0,4216,80.1,0.351,18.5,Clear,evt_1791025848286,2026-10-03T16:40:48.000+05:30,16,7,1,0.8899999999999999,0.8783333333333333,HIGH,CONGESTION_WARNING,2026-10-03T16:41:11.357+05:30

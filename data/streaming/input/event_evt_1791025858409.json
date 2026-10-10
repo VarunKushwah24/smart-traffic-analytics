@@ -1,0 +1,1 @@
+{"timestamp": "2026-10-03 16:40:58", "segment_id": "SEG_I494_EB", "road_name": "I-494 Beltway EB", "source_node": "BLOOMINGTON", "target_node": "EAGAN", "speed_limit_kmh": 100.0, "capacity_vph": 4500.0, "traffic_volume": 3320, "average_speed": 90.4, "occupancy": 0.295, "temperature_c": 18.5, "weather_main": "Clear", "event_id": "evt_1791025858409"}

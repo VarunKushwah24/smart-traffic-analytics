@@ -1,0 +1,1 @@
+{"timestamp": "2026-10-03 16:40:47", "segment_id": "SEG_MN62_EB", "road_name": "MN-62 Crosstown EB", "source_node": "EDINA", "target_node": "AIRPORT_MSP", "speed_limit_kmh": 85.0, "capacity_vph": 3600.0, "traffic_volume": 2368, "average_speed": 80.6, "occupancy": 0.263, "temperature_c": 18.5, "weather_main": "Clear", "event_id": "evt_1791025847280"}

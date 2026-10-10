@@ -1,0 +1,66 @@
+# Smart Traffic Congestion Prediction & Intelligent Route Analytics Configuration
+
+app:
+  name: "Smart Traffic Big Data Analytics"
+  version: "1.0.0"
+  random_seed: 42
+
+paths:
+  raw_uci_data: "data/raw/Metro_Interstate_Traffic_Volume.csv"
+  raw_corridor_data: "data/raw/metro_corridor_network.csv"
+  processed_dir: "data/processed"
+  processed_parquet: "data/processed/traffic_features.parquet"
+  processed_csv: "data/processed/traffic_features_sample.csv"
+  models_dir: "models"
+  best_classifier_path: "models/best_rf_classifier"
+  best_regressor_path: "models/best_gbt_regressor"
+  metrics_dir: "results/metrics"
+  plots_dir: "results/plots"
+  predictions_dir: "results/predictions"
+  routes_dir: "results/routes"
+  powerbi_dir: "powerbi"
+  streaming_input: "data/streaming/input"
+  streaming_output: "data/streaming/output"
+  streaming_checkpoint: "data/streaming/checkpoint"
+
+spark:
+  app_name: "SmartTrafficAnalytics"
+  master: "local[*]"
+  driver_memory: "2g"
+  driver_host: "127.0.0.1"
+  driver_bind_address: "127.0.0.1"
+  log_level: "WARN"
+  shuffle_partitions: 4
+
+kafka:
+  bootstrap_servers: "localhost:9092"
+  topic: "traffic-events"
+  group_id: "traffic-spark-consumer-group"
+  simulation_mode: true
+  event_interval_sec: 1.0
+
+congestion_thresholds:
+  low_max_vc: 0.60
+  medium_max_vc: 0.85
+  high_max_vc: 1.05
+  speed_ratio_free_flow: 0.80
+  speed_ratio_moderate: 0.60
+  speed_ratio_congested: 0.35
+
+ml:
+  test_size: 0.20
+  k_folds: 3
+  classifiers:
+    - "LogisticRegression"
+    - "DecisionTreeClassifier"
+    - "RandomForestClassifier"
+    - "GBTClassifier"
+    - "NaiveBayes"
+  regressors:
+    - "LinearRegression"
+    - "RandomForestRegressor"
+    - "GBTRegressor"
+
+routing:
+  dijkstra_alpha: 0.50 # Penalty multiplier for congested segments
+  cost_function: "travel_time_congestion_penalty" # cost = (dist / speed) * (1 + alpha * congestion_level)

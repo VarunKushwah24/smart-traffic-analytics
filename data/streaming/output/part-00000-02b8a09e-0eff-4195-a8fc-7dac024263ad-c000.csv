@@ -1,0 +1,2 @@
+timestamp,segment_id,road_name,source_node,target_node,speed_limit_kmh,capacity_vph,traffic_volume,average_speed,occupancy,temperature_c,weather_main,event_id,event_time,hour,day_of_week,is_rush_hour,speed_ratio,vc_ratio,predicted_congestion,alert_status,processed_time
+2026-10-03 16:40:46,SEG_I35W_SB,I-35W Southbound,DOWNTOWN_MPLS,AIRPORT_MSP,95.0,4200.0,3924,87.3,0.374,18.5,Clear,evt_1791025846274,2026-10-03T16:40:46.000+05:30,16,7,1,0.9189473684210526,0.9342857142857143,HIGH,CONGESTION_WARNING,2026-10-03T16:40:58.621+05:30

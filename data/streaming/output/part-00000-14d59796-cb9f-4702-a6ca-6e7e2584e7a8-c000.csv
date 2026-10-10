@@ -1,0 +1,2 @@
+timestamp,segment_id,road_name,source_node,target_node,speed_limit_kmh,capacity_vph,traffic_volume,average_speed,occupancy,temperature_c,weather_main,event_id,event_time,hour,day_of_week,is_rush_hour,speed_ratio,vc_ratio,predicted_congestion,alert_status,processed_time
+2026-10-03 16:40:47,SEG_MN62_EB,MN-62 Crosstown EB,EDINA,AIRPORT_MSP,85.0,3600.0,2368,80.6,0.263,18.5,Clear,evt_1791025847280,2026-10-03T16:40:47.000+05:30,16,7,1,0.948235294117647,0.6577777777777778,MEDIUM,NORMAL_FLOW,2026-10-03T16:41:05.464+05:30

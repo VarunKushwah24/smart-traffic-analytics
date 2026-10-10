@@ -1,0 +1,1 @@
+{"timestamp": "2026-10-03 16:40:54", "segment_id": "SEG_I35W_SB", "road_name": "I-35W Southbound", "source_node": "DOWNTOWN_MPLS", "target_node": "AIRPORT_MSP", "speed_limit_kmh": 95.0, "capacity_vph": 4200.0, "traffic_volume": 2998, "average_speed": 89.9, "occupancy": 0.286, "temperature_c": 18.5, "weather_main": "Clear", "event_id": "evt_1791025854377"}

@@ -1,0 +1,31 @@
+# Python Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+
+# Windows Hadoop binaries
+hadoop/
+
+# Spark runtime logs and warehouse
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE configs
+.vscode/
+.idea/
+
+# Large streaming scratch buffers
+data/streaming/checkpoint/

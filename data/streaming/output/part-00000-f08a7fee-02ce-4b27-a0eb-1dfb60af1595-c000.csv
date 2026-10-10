@@ -1,0 +1,2 @@
+timestamp,segment_id,road_name,source_node,target_node,speed_limit_kmh,capacity_vph,traffic_volume,average_speed,occupancy,temperature_c,weather_main,event_id,event_time,hour,day_of_week,is_rush_hour,speed_ratio,vc_ratio,predicted_congestion,alert_status,processed_time
+2026-10-03 16:40:45,SEG_I35W_NB,I-35W Northbound,AIRPORT_MSP,DOWNTOWN_MPLS,95.0,4200.0,2901,88.6,0.276,16.0,Clouds,evt_1791025845271,2026-10-03T16:40:45.000+05:30,16,7,1,0.9326315789473684,0.6907142857142857,MEDIUM,NORMAL_FLOW,2026-10-03T16:40:47.155+05:30
