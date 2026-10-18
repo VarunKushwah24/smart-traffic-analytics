@@ -1,33 +1,33 @@
 {
-  "timestamp": "2026-10-18T15:38:45.157843",
+  "timestamp": "2026-10-18T15:47:22.972943",
   "records_analyzed": 100,
   "feature_drift": {
     "features": {
       "traffic_volume": {
-        "ks_statistic": 0.06,
-        "p_value": 0.99967,
-        "psi": 0.0482,
+        "ks_statistic": 0.1,
+        "p_value": 0.88465,
+        "psi": 0.1302,
         "status": "STABLE",
-        "severity": "NORMAL"
+        "severity": "MODERATE"
       },
       "average_speed": {
-        "ks_statistic": 0.07,
-        "p_value": 0.99605,
-        "psi": 0.0898,
+        "ks_statistic": 0.04,
+        "p_value": 1.0,
+        "psi": 0.0809,
         "status": "STABLE",
         "severity": "NORMAL"
       },
       "occupancy": {
-        "ks_statistic": 0.06,
-        "p_value": 0.99967,
-        "psi": 0.0813,
+        "ks_statistic": 0.07,
+        "p_value": 0.99605,
+        "psi": 0.0817,
         "status": "STABLE",
         "severity": "NORMAL"
       },
       "temperature_c": {
-        "ks_statistic": 0.06,
-        "p_value": 0.99967,
-        "psi": 0.0661,
+        "ks_statistic": 0.11,
+        "p_value": 0.80418,
+        "psi": 0.088,
         "status": "STABLE",
         "severity": "NORMAL"
       }

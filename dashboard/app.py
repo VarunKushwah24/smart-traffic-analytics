@@ -924,10 +924,10 @@ elif page == "🤖  Prediction Lab":
 
     forecaster = MultiHorizonTrafficForecaster()
     pred_traj = forecaster.predict_future_trajectory(
-        current_volume=float(in_vol),
-        current_speed=float(in_spd),
+        current_volume=float(in_volume),
+        current_speed=float(in_speed),
         temperature_c=float(in_temp),
-        current_hour=int(in_hour)
+        current_hour=int(sel_hour)
     )
 
     t_df = pd.DataFrame(pred_traj["trajectory"])
@@ -937,9 +937,9 @@ elif page == "🤖  Prediction Lab":
     
     # Add Current baseline point
     time_pts = ["Current (t+0)", "t + 15 min", "t + 30 min", "t + 60 min", "t + 120 min"]
-    vol_pts = [int(in_vol)] + t_df["predicted_volume"].tolist()
-    upper_pts = [int(in_vol)] + t_df["upper_bound_95"].tolist()
-    lower_pts = [int(in_vol)] + t_df["lower_bound_95"].tolist()
+    vol_pts = [int(in_volume)] + t_df["predicted_volume"].tolist()
+    upper_pts = [int(in_volume)] + t_df["upper_bound_95"].tolist()
+    lower_pts = [int(in_volume)] + t_df["lower_bound_95"].tolist()
     
     # 95% Confidence Interval Band
     fig_traj.add_trace(go.Scatter(
