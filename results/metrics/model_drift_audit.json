@@ -1,0 +1,49 @@
+{
+  "timestamp": "2026-10-18T15:38:45.157843",
+  "records_analyzed": 100,
+  "feature_drift": {
+    "features": {
+      "traffic_volume": {
+        "ks_statistic": 0.06,
+        "p_value": 0.99967,
+        "psi": 0.0482,
+        "status": "STABLE",
+        "severity": "NORMAL"
+      },
+      "average_speed": {
+        "ks_statistic": 0.07,
+        "p_value": 0.99605,
+        "psi": 0.0898,
+        "status": "STABLE",
+        "severity": "NORMAL"
+      },
+      "occupancy": {
+        "ks_statistic": 0.06,
+        "p_value": 0.99967,
+        "psi": 0.0813,
+        "status": "STABLE",
+        "severity": "NORMAL"
+      },
+      "temperature_c": {
+        "ks_statistic": 0.06,
+        "p_value": 0.99967,
+        "psi": 0.0661,
+        "status": "STABLE",
+        "severity": "NORMAL"
+      }
+    },
+    "drift_feature_count": 0,
+    "total_features_evaluated": 4,
+    "system_feature_drift": false
+  },
+  "performance_drift": {
+    "live_accuracy": 0.962,
+    "live_f1_score": 0.958,
+    "baseline_f1": 0.9881,
+    "f1_drop": 0.0301,
+    "performance_drift_detected": false,
+    "status": "OPTIMAL"
+  },
+  "trigger_retraining": false,
+  "recommendation": "SYSTEM_NOMINAL: Model accuracy and data distribution are within acceptable bounds. Retraining deferred."
+}

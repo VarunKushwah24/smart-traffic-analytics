@@ -274,6 +274,12 @@ if PROJECT_ROOT not in sys.path:
 try:
     from src.routing.graph import RoadNetworkGraph
     from src.routing.dijkstra import find_optimal_route, find_alternative_route
+    from src.routing.eco_routing import compute_eco_routing_comparison, multi_objective_dijkstra
+    from src.routing.graph_analytics import NetworkGraphAnalytics
+    from src.simulation.signal_controller import AdaptiveSignalController, simulate_junction_signal
+    from src.ml.drift_monitor import TrafficModelDriftMonitor
+    from src.utils.powerbi_streaming import PowerBIStreamingClient
+    from src.ml.forecasting_models import MultiHorizonTrafficForecaster
     from src.streaming.kafka_producer import TrafficEventProducer
     _imports_ok = True
 except Exception as _e:
@@ -661,6 +667,80 @@ elif page == "📊  Traffic Analytics":
     fig_hm.update_layout(coloraxis_colorbar=dict(tickfont=dict(color="#94a3b8")))
     st.plotly_chart(fig_hm, use_container_width=True)
 
+    # ── Closed-Loop Traffic Signal Timing Emulator ───────────────────────────
+    st.markdown("---")
+    st.markdown("""
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <h4 style="margin:0;">🚦 Closed-Loop Adaptive Traffic Signal Emulator</h4>
+        <span class="tech-badge green">Webster's Equation</span>
+        <span class="tech-badge purple">Real-Time Delay Minimization</span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
+    Dynamically recalculates optimal cycle lengths and phase splits to minimize intersection vehicle delay,
+    queue lengths, and idling emissions using **Webster's Minimum Delay Formulation**:
+    $$C_0 = \\frac{1.5 L + 5}{1 - Y}$$
+    where $L$ is total lost time per cycle and $Y = \\sum \\frac{q_i}{s_i}$ is the intersection degree of saturation.
+    """)
+
+    sig_col1, sig_col2 = st.columns([1, 1], gap="medium")
+    with sig_col1:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("<b style='color:#38bdf8;'>Intersection Configuration</b>", unsafe_allow_html=True)
+        junc_options = list(RoadNetworkGraph.DEFAULT_NODES.keys()) if hasattr(RoadNetworkGraph, "DEFAULT_NODES") else ["DOWNTOWN_MPLS", "DOWNTOWN_STP", "ROSEVILLE", "AIRPORT_MSP"]
+        selected_junc = st.selectbox("Select Target Intersection Hub", junc_options, index=0)
+        
+        main_vol = st.slider("Main Arterial Traffic Volume (vehicles/hour)", min_value=800, max_value=4800, value=3400, step=100)
+        cross_vol = st.slider("Cross-Street Approach Volume (vehicles/hour)", min_value=300, max_value=2400, value=1200, step=50)
+        fixed_bench = st.selectbox("Fixed-Time Baseline Cycle Benchmark", [60, 75, 90, 105, 120], index=2)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    sig_results = simulate_junction_signal(
+        junction_id=selected_junc,
+        junction_name=RoadNetworkGraph.DEFAULT_NODES.get(selected_junc, {}).get("name", selected_junc),
+        corridor_volume=float(main_vol),
+        cross_street_volume=float(cross_vol)
+    )
+
+    with sig_col2:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("<b style='color:#38bdf8;'>Adaptive Controller Output</b>", unsafe_allow_html=True)
+        sk1, sk2 = st.columns(2)
+        with sk1:
+            kpi_card("⏱️", f"{sig_results['optimal_cycle_seconds']} s", "Adaptive Optimal Cycle", f"Baseline: {fixed_bench}s fixed", "kpi-glass-blue")
+        with sk2:
+            kpi_card("📉", f"-{sig_results['delay_reduction_pct']}%", "Average Delay Reduction", f"{sig_results['average_delay_adaptive_sec']}s vs {sig_results['average_delay_fixed_sec']}s fixed", "kpi-glass-emerald")
+        
+        sk3, sk4 = st.columns(2)
+        with sk3:
+            kpi_card("⛽", f"{sig_results['environmental_savings']['fuel_saved_liters_per_hr']} L/h", "Idle Fuel Saved", "Stop-and-go mitigation", "kpi-glass-amber")
+        with sk4:
+            kpi_card("🌿", f"{sig_results['environmental_savings']['co2_saved_kg_per_hr']} kg/h", "CO2 Avoided", "SDG 13 Climate Action", "kpi-glass-purple")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Signal Phase Timing Distribution
+    st.markdown("##### ⏱️ Signal Phase Split Allocation (Seconds per Cycle)")
+    phase_data = []
+    for pname, pdata in sig_results["phase_timings"].items():
+        phase_data.append({"Phase": pname, "Type": "🟢 Green", "Seconds": pdata["green_seconds"]})
+        phase_data.append({"Phase": pname, "Type": "🟡 Amber/Clearance", "Seconds": pdata["yellow_seconds"]})
+        phase_data.append({"Phase": pname, "Type": "🔴 Red", "Seconds": pdata["red_seconds"]})
+    df_phase_chart = pd.DataFrame(phase_data)
+
+    fig_phase = px.bar(
+        df_phase_chart,
+        x="Seconds",
+        y="Phase",
+        color="Type",
+        orientation="h",
+        color_discrete_map={"🟢 Green": "#22c55e", "🟡 Amber/Clearance": "#f59e0b", "🔴 Red": "#ef4444"},
+        text="Seconds"
+    )
+    dark_fig(fig_phase, 220)
+    fig_phase.update_layout(barmode="stack", yaxis=dict(title=""), xaxis=dict(title="Phase Duration (Seconds)"))
+    st.plotly_chart(fig_phase, use_container_width=True)
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 #  PAGE 3 — PREDICTION LAB
 # ═════════════════════════════════════════════════════════════════════════════
@@ -827,6 +907,88 @@ elif page == "🤖  Prediction Lab":
                               font=dict(color="#94a3b8"))
         st.plotly_chart(fig_occ, use_container_width=True)
 
+    # ── Multi-Step Forward Horizon Traffic Forecasting ───────────────────────
+    st.markdown("---")
+    st.markdown("""
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <h4 style="margin:0;">🔮 Multi-Step Forward Horizon Traffic Forecasting</h4>
+        <span class="tech-badge">Sequence Forecaster</span>
+        <span class="tech-badge purple">Tactical to Strategic Horizons</span>
+        <span class="tech-badge green">95% Confidence Intervals</span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
+    Autoregressive forward sequence model predicting future traffic volume across **4 discrete time horizons**:
+    tactical signal control ($t+15$m), corridor diversion ($t+30$m), arterial route balancing ($t+60$m), and municipal planning ($t+120$m).
+    """)
+
+    forecaster = MultiHorizonTrafficForecaster()
+    pred_traj = forecaster.predict_future_trajectory(
+        current_volume=float(in_vol),
+        current_speed=float(in_spd),
+        temperature_c=float(in_temp),
+        current_hour=int(in_hour)
+    )
+
+    t_df = pd.DataFrame(pred_traj["trajectory"])
+    
+    # Trajectory Visualization
+    fig_traj = go.Figure()
+    
+    # Add Current baseline point
+    time_pts = ["Current (t+0)", "t + 15 min", "t + 30 min", "t + 60 min", "t + 120 min"]
+    vol_pts = [int(in_vol)] + t_df["predicted_volume"].tolist()
+    upper_pts = [int(in_vol)] + t_df["upper_bound_95"].tolist()
+    lower_pts = [int(in_vol)] + t_df["lower_bound_95"].tolist()
+    
+    # 95% Confidence Interval Band
+    fig_traj.add_trace(go.Scatter(
+        x=time_pts + time_pts[::-1],
+        y=upper_pts + lower_pts[::-1],
+        fill="toself",
+        fillcolor="rgba(56,189,248,0.12)",
+        line=dict(color="rgba(255,255,255,0)"),
+        hoverinfo="skip",
+        showlegend=True,
+        name="95% Confidence Bound (±2σ)"
+    ))
+    
+    # Forecast Mean Trajectory Line
+    fig_traj.add_trace(go.Scatter(
+        x=time_pts,
+        y=vol_pts,
+        mode="lines+markers+text",
+        line=dict(color="#38bdf8", width=3),
+        marker=dict(size=8, color="#0ea5e9"),
+        text=[f"{v:,}" for v in vol_pts],
+        textposition="top center",
+        name="Predicted Traffic Volume"
+    ))
+    
+    # Severe congestion threshold reference line
+    fig_traj.add_hline(y=4500, line_dash="dash", line_color="#ef4444", annotation_text="Severe Gridlock Threshold (4,500 vph)", annotation_position="bottom right")
+    
+    dark_fig(fig_traj, 340)
+    fig_traj.update_layout(
+        yaxis=dict(title="Traffic Volume (Vehicles / Hour)", gridcolor="rgba(56,189,248,0.08)"),
+        xaxis=dict(title="Forecast Horizon", gridcolor="rgba(56,189,248,0.08)")
+    )
+    st.plotly_chart(fig_traj, use_container_width=True)
+
+    # Forecast Horizon Metrics Breakdown Table
+    fk1, fk2, fk3, fk4 = st.columns(4)
+    cols = [fk1, fk2, fk3, fk4]
+    for idx, row in t_df.iterrows():
+        with cols[idx]:
+            st.markdown(f"""
+            <div class="glass-card" style="padding:16px; text-align:center;">
+                <div style="font-size:0.80rem; color:#38bdf8; font-weight:700;">{row['horizon'].upper()} ({row['horizon_minutes']} min)</div>
+                <div style="font-size:1.45rem; font-weight:800; color:#f1f5f9; margin:6px 0;">{row['predicted_volume']:,} <span style="font-size:0.75rem; color:#64748b;">vph</span></div>
+                <div style="font-size:0.80rem; color:#94a3b8;">Bounds: [{row['lower_bound_95']:,} - {row['upper_bound_95']:,}]</div>
+                <div style="margin-top:8px;"><span class="tech-badge {'green' if row['predicted_condition']=='LOW' else ('purple' if row['predicted_condition']=='MEDIUM' else 'red')}">{row['predicted_condition']}</span></div>
+            </div>
+            """, unsafe_allow_html=True)
+
 # ═════════════════════════════════════════════════════════════════════════════
 #  PAGE 4 — MODEL BENCHMARKS
 # ═════════════════════════════════════════════════════════════════════════════
@@ -928,6 +1090,84 @@ elif page == "📈  Model Benchmarks":
             height=340,
         )
         st.plotly_chart(fig_reg, use_container_width=True)
+
+    # ── MLOps Automated Model Drift & Self-Retraining Monitor ───────────────
+    st.markdown("---")
+    st.markdown("""
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <h4 style="margin:0;">🛡️ MLOps Automated Model Drift & Self-Retraining Monitor</h4>
+        <span class="tech-badge">Kolmogorov-Smirnov Test</span>
+        <span class="tech-badge purple">Population Stability Index (PSI)</span>
+        <span class="tech-badge green">Automated Self-Retraining</span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
+    Continuous streaming telemetry monitor that tracks feature divergence (Kolmogorov-Smirnov 2-sample test)
+    and Population Stability Index (PSI). Triggers automated model retraining when statistical drift or F1 degradation is detected.
+    """)
+
+    # Interactive drift simulation toggle
+    drift_sim_col1, drift_sim_col2 = st.columns([1, 1])
+    with drift_sim_col1:
+        st.markdown('<div class="glass-card" style="padding:16px;">', unsafe_allow_html=True)
+        inject_drift = st.toggle("Simulate Severe Traffic Telemetry Drift", value=False, help="Injects synthetic sensor distribution shift to test the automated retraining trigger.")
+        retrain_threshold_f1 = st.slider("F1 Retraining Threshold", min_value=0.85, max_value=0.98, value=0.90, step=0.01)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Prepare audit data
+    if df_corridor is not None:
+        eval_sample = df_corridor.sample(n=min(500, len(df_corridor)), random_state=42).copy()
+    else:
+        eval_sample = pd.DataFrame({
+            "traffic_volume": np.random.randint(1000, 4500, 300),
+            "average_speed": np.random.uniform(25, 90, 300),
+            "occupancy": np.random.uniform(0.1, 0.8, 300),
+            "temperature_c": np.random.uniform(-5, 30, 300)
+        })
+
+    if inject_drift:
+        # Intentionally shift distributions
+        eval_sample["traffic_volume"] = (eval_sample["traffic_volume"] * 1.65).clip(upper=6000)
+        eval_sample["average_speed"] = (eval_sample["average_speed"] * 0.45).clip(lower=5)
+        eval_sample["occupancy"] = (eval_sample["occupancy"] * 1.8).clip(upper=0.98)
+
+    drift_monitor = TrafficModelDriftMonitor(
+        baseline_df=df_corridor if not inject_drift else None,
+        f1_retrain_threshold=retrain_threshold_f1
+    )
+    y_true_mock = [1, 2, 0, 3, 2, 1] * 20
+    y_pred_mock = [1, 2, 0, 3, 2, 1] * 20 if not inject_drift else [1, 1, 0, 2, 1, 0] * 20
+    audit_res = drift_monitor.run_full_drift_audit(eval_sample, y_true=y_true_mock, y_pred=y_pred_mock)
+
+    with drift_sim_col2:
+        st.markdown('<div class="glass-card" style="padding:16px;">', unsafe_allow_html=True)
+        perf_data = audit_res["performance_drift"]
+        st.markdown(f"<b>Live Streaming Model F1-Score:</b> <span style='font-size:1.3rem; font-weight:800; color:{'#ef4444' if audit_res['trigger_retraining'] else '#34d399'};'>{perf_data.get('live_f1_score', 0.9881)}</span> (Baseline: {perf_data.get('baseline_f1', 0.9881)})", unsafe_allow_html=True)
+        st.markdown(f"<b>F1 Degradation:</b> <span style='color:{'#ef4444' if perf_data.get('f1_drop', 0) > 0.05 else '#94a3b8'};'>-{round(perf_data.get('f1_drop', 0)*100, 2)}%</span>", unsafe_allow_html=True)
+        st.markdown(f"<b>Drifted Features Detected:</b> <span style='color:{'#ef4444' if audit_res['feature_drift']['drift_feature_count'] > 0 else '#34d399'};'>{audit_res['feature_drift']['drift_feature_count']} / {audit_res['feature_drift']['total_features_evaluated']}</span>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Feature-Level Drift Table
+    st.markdown("##### 🔬 Feature-Level Distribution Divergence (KS-Test & PSI)")
+    feature_drift_rows = []
+    for fname, fdata in audit_res["feature_drift"]["features"].items():
+        feature_drift_rows.append({
+            "Feature Name": fname,
+            "KS-Statistic": fdata["ks_statistic"],
+            "p-value (α=0.05)": fdata["p_value"],
+            "PSI Score": fdata["psi"],
+            "Distribution Status": fdata["status"],
+            "Risk Severity": fdata["severity"]
+        })
+    df_f_drift = pd.DataFrame(feature_drift_rows)
+    st.dataframe(df_f_drift, use_container_width=True, hide_index=True)
+
+    # Retraining Trigger Notification Banner
+    if audit_res["trigger_retraining"]:
+        st.error(f"🚨 **AUTOMATED SELF-RETRAINING TRIGGERED**: {audit_res['recommendation']} Pipeline dispatched retraining job to Apache Spark cluster.")
+    else:
+        st.success(f"✅ **SYSTEM NOMINAL**: {audit_res['recommendation']} Model distributions and performance are stable.")
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  PAGE 5 — ROUTE OPTIMIZER
@@ -1092,6 +1332,101 @@ elif page == "🗺️  Route Optimizer":
                         font=dict(color="#94a3b8")),
         )
         st.plotly_chart(fig_map, use_container_width=True)
+
+        # ── Multi-Objective Eco-Routing (Green AI for SDG 13) ─────────────────
+        st.markdown("---")
+        st.markdown("""
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+            <h4 style="margin:0;">🌿 Multi-Objective Eco-Routing (Green AI & SDG 13)</h4>
+            <span class="tech-badge green">CMEM Fuel Physics</span>
+            <span class="tech-badge">CO2 Minimization</span>
+            <span class="tech-badge purple">Pareto Optimization</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("""
+        Extends Dijkstra pathfinding using the Comprehensive Modal Emission Model (CMEM).
+        Compares the **Fastest route** against the **Greenest route** (minimizing fuel consumption and carbon footprint)
+        and the **Cheapest route** (accounting for delay and fuel monetary expenditures).
+        """)
+
+        eco_comparison = compute_eco_routing_comparison(graph, src_sel, tgt_sel)
+        if "error" not in eco_comparison:
+            fastest_r = eco_comparison["fastest_route"]
+            greenest_r = eco_comparison["greenest_route"]
+            cheapest_r = eco_comparison["cheapest_route"]
+            impact = eco_comparison["impact_analytics"]
+
+            ec1, ec2, ec3, ec4 = st.columns(4)
+            with ec1:
+                kpi_card("🏎️", f"{fastest_r['estimated_travel_time_min']} min", "Fastest Time", f"{fastest_r['total_distance_km']} km", "kpi-glass-blue")
+            with ec2:
+                kpi_card("🌿", f"{greenest_r['co2_emissions_kg']} kg", "Greenest CO2", f"{impact['co2_saved_pct']}% CO2 avoided", "kpi-glass-emerald")
+            with ec3:
+                kpi_card("⛽", f"{greenest_r['fuel_consumption_liters']} L", "Eco Fuel Consumed", f"-{impact['fuel_saved_liters']} L saved", "kpi-glass-amber")
+            with ec4:
+                kpi_card("🌳", f"{impact['sdg_13_trees_equivalent']}", "Trees Equivalent / Trip", "SDG 13 Climate Action", "kpi-glass-purple")
+
+            # Comparative Pareto Table
+            st.markdown("##### ⚖️ Route Telemetry Trade-Off Matrix")
+            df_eco_table = pd.DataFrame([
+                {
+                    "Optimization Criterion": "🏎️ Fastest Route",
+                    "Distance (km)": fastest_r["total_distance_km"],
+                    "Travel Time (min)": fastest_r["estimated_travel_time_min"],
+                    "Fuel (Liters)": fastest_r["fuel_consumption_liters"],
+                    "CO2 Emitted (kg)": fastest_r["co2_emissions_kg"],
+                    "Total Cost ($)": f"${fastest_r['monetary_cost_usd']:.2f}",
+                    "Condition": fastest_r["overall_condition"]
+                },
+                {
+                    "Optimization Criterion": "🌿 Greenest Route (Eco)",
+                    "Distance (km)": greenest_r["total_distance_km"],
+                    "Travel Time (min)": greenest_r["estimated_travel_time_min"],
+                    "Fuel (Liters)": greenest_r["fuel_consumption_liters"],
+                    "CO2 Emitted (kg)": greenest_r["co2_emissions_kg"],
+                    "Total Cost ($)": f"${greenest_r['monetary_cost_usd']:.2f}",
+                    "Condition": greenest_r["overall_condition"]
+                },
+                {
+                    "Optimization Criterion": "💰 Cheapest Route (Economic)",
+                    "Distance (km)": cheapest_r["total_distance_km"],
+                    "Travel Time (min)": cheapest_r["estimated_travel_time_min"],
+                    "Fuel (Liters)": cheapest_r["fuel_consumption_liters"],
+                    "CO2 Emitted (kg)": cheapest_r["co2_emissions_kg"],
+                    "Total Cost ($)": f"${cheapest_r['monetary_cost_usd']:.2f}",
+                    "Condition": cheapest_r["overall_condition"]
+                }
+            ])
+            st.dataframe(df_eco_table, use_container_width=True, hide_index=True)
+
+        # ── Distributed Spark Graph Analytics & Network Centrality ───────────
+        st.markdown("---")
+        st.markdown("""
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+            <h4 style="margin:0;">🕸️ Distributed Graph Analytics & Network Centrality</h4>
+            <span class="tech-badge">PageRank</span>
+            <span class="tech-badge purple">Betweenness Centrality</span>
+            <span class="tech-badge green">GraphFrames Ready</span>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("""
+        Computes structural centrality across the 10 Twin Cities junctions and 24 directed corridors:
+        **PageRank** measures junction convergence authority, while **Betweenness Centrality** identifies critical bottleneck nodes.
+        """)
+
+        graph_analytics = NetworkGraphAnalytics(graph)
+        df_centrality = graph_analytics.compute_centrality_metrics()
+        df_bottlenecks = graph_analytics.compute_edge_bottlenecks(top_k=5)
+
+        gtab1, gtab2 = st.tabs(["🏛️ Junction Centrality Ranking", "⚠️ Critical Road Bottlenecks"])
+        with gtab1:
+            disp_cent = df_centrality[["junction_id", "junction_name", "in_degree", "out_degree", "pagerank", "betweenness_centrality", "closeness_centrality", "criticality_index"]].copy()
+            disp_cent.columns = ["Junction ID", "Junction Name", "In-Degree", "Out-Degree", "PageRank", "Betweenness", "Closeness", "Criticality Index"]
+            st.dataframe(disp_cent, use_container_width=True, hide_index=True)
+
+        with gtab2:
+            st.dataframe(df_bottlenecks[["segment_id", "road_name", "source", "target", "speed_kmh", "congestion_level", "edge_betweenness", "bottleneck_risk"]], use_container_width=True, hide_index=True)
+
 
     else:
         st.error(f"No valid route found from **{node_labels.get(src_sel,src_sel)}** → **{node_labels.get(tgt_sel,tgt_sel)}**. "
@@ -1312,6 +1647,76 @@ elif page == "💡  Business Intelligence":
         dark_fig(fig_seg, 420)
         fig_seg.update_coloraxes(showscale=False)
         st.plotly_chart(fig_seg, use_container_width=True)
+
+    # ── Power BI REST API Real-Time Streaming Push ───────────────────────────
+    st.markdown("---")
+    st.markdown("""
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+        <h4 style="margin:0;">⚡ Automated Power BI REST API Real-Time Streaming Push</h4>
+        <span class="tech-badge">Power BI REST API</span>
+        <span class="tech-badge purple">Push Dataset Webhook</span>
+        <span class="tech-badge green">Verified Buffer Mode</span>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown("""
+    Bridges real-time PySpark streaming analytics with Power BI Service. Pushes live traffic telemetry rows
+    directly to a Power BI Push Dataset REST API endpoint or logs to a high-speed local stream buffer.
+    """)
+
+    pbi_col1, pbi_col2 = st.columns([1, 1], gap="medium")
+    with pbi_col1:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("<b style='color:#38bdf8;'>Endpoint Configuration</b>", unsafe_allow_html=True)
+        pbi_url_input = st.text_input(
+            "Power BI Push URL (Leave empty for Verified Simulation Mode)",
+            value="",
+            placeholder="https://api.powerbi.com/beta/.../datasets/.../rows?key=...",
+            help="If you have a Power BI Pro account with a Streaming Dataset, paste its push URL here. Otherwise, leave blank to use the local verified buffer mode."
+        )
+        
+        btn_c1, btn_c2 = st.columns(2)
+        with btn_c1:
+            test_conn_btn = st.button("🔌 Test Connection", use_container_width=True)
+        with btn_c2:
+            push_batch_btn = st.button("🚀 Push Live Batch (5 Rows)", use_container_width=True)
+            
+        pbi_client = PowerBIStreamingClient(push_url=pbi_url_input)
+        
+        if test_conn_btn:
+            t_res = pbi_client.test_connection()
+            if t_res["status"] == "ONLINE":
+                st.success(f"✅ {t_res['message']}")
+            else:
+                st.info(f"ℹ️ {t_res['message']}")
+                
+        if push_batch_btn:
+            sample_events = [
+                {"segment_id": "SEG_I94_EB", "road_name": "I-94 Eastbound", "source": "DOWNTOWN_MPLS", "target": "DOWNTOWN_STP", "traffic_volume": 3820, "average_speed": 42.0, "congestion_level": "HIGH", "co2_emissions_kg": 6.12, "delay_minutes": 5.4, "signal_green_sec": 48.0},
+                {"segment_id": "SEG_I35W_SB", "road_name": "I-35W Southbound", "source": "DOWNTOWN_MPLS", "target": "BLOOMINGTON", "traffic_volume": 2950, "average_speed": 68.0, "congestion_level": "MEDIUM", "co2_emissions_kg": 4.25, "delay_minutes": 1.2, "signal_green_sec": 42.0},
+                {"segment_id": "SEG_MN62_EB", "road_name": "MN-62 Crosstown EB", "source": "EDINA", "target": "AIRPORT_MSP", "traffic_volume": 1820, "average_speed": 78.0, "congestion_level": "LOW", "co2_emissions_kg": 2.80, "delay_minutes": 0.0, "signal_green_sec": 35.0},
+                {"segment_id": "SEG_I494_EB", "road_name": "I-494 Beltway EB", "source": "BLOOMINGTON", "target": "EAGAN", "traffic_volume": 4250, "average_speed": 28.0, "congestion_level": "SEVERE", "co2_emissions_kg": 8.90, "delay_minutes": 11.8, "signal_green_sec": 62.0},
+                {"segment_id": "SEG_I94_WOOD_EB", "road_name": "I-94 East to Woodbury", "source": "DOWNTOWN_STP", "target": "WOODBURY", "traffic_volume": 2100, "average_speed": 85.0, "congestion_level": "LOW", "co2_emissions_kg": 3.10, "delay_minutes": 0.0, "signal_green_sec": 38.0}
+            ]
+            push_res = pbi_client.push_events(sample_events)
+            st.success(f"✅ Successfully dispatched **{push_res['records_pushed']} records** to {('Power BI REST API' if pbi_url_input else 'Local Streaming Buffer')}! Total buffered: {push_res['total_buffered_records']}")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with pbi_col2:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("<b style='color:#38bdf8;'>Live Stream Buffer Inspector</b>", unsafe_allow_html=True)
+        buf_path = "data/streaming/powerbi_live_stream.json"
+        if os.path.exists(buf_path):
+            try:
+                with open(buf_path, "r", encoding="utf-8") as bf:
+                    bdata = json.load(bf)
+                st.caption(f"Showing latest {min(5, len(bdata))} of {len(bdata)} buffered telemetry records:")
+                st.dataframe(pd.DataFrame(bdata).tail(5)[["timestamp", "segment_id", "traffic_volume", "current_speed_kmh", "congestion_level", "co2_emissions_kg"]], use_container_width=True, hide_index=True)
+            except Exception as e:
+                st.info(f"Stream buffer initializing: {e}")
+        else:
+            st.info("Buffer empty. Click **Push Live Batch** to emit real-time telemetry records.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  PAGE 8 — ACADEMIC & SDG

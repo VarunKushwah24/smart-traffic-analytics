@@ -26,11 +26,32 @@ class RoadNetworkGraph:
         "EAGAN":         {"lat": 44.8041, "lon": -93.1669, "name": "Eagan South"}
     }
 
-    def __init__(self, nodes: Optional[Dict] = None):
+    def __init__(self, nodes: Optional[Dict] = None, auto_load_default: bool = False):
         self.nodes = nodes if nodes else self.DEFAULT_NODES.copy()
         # Adjacency list: node -> list of outgoing edges
         self.adjacency: Dict[str, List[Dict]] = {node: [] for node in self.nodes}
         self.edge_map: Dict[str, Dict] = {} # segment_id -> edge details
+        
+        if auto_load_default:
+            corridor_file = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "metro_corridor_network.csv")
+            if os.path.exists(corridor_file):
+                try:
+                    df = pd.read_csv(corridor_file)
+                    latest_df = df.sort_values(by="timestamp").groupby("segment_id").last().reset_index()
+                    for _, row in latest_df.iterrows():
+                        if row["source_node"] in self.nodes and row["target_node"] in self.nodes:
+                            self.add_edge(
+                                segment_id=row["segment_id"],
+                                road_name=row["road_name"],
+                                source=row["source_node"],
+                                target=row["target_node"],
+                                distance_km=row["distance_km"],
+                                speed_limit_kmh=row["speed_limit_kmh"],
+                                current_speed_kmh=row.get("average_speed", row["speed_limit_kmh"]),
+                                congestion_level=row.get("congestion_level", "LOW")
+                            )
+                except Exception as e:
+                    logger.warning(f"Could not auto-load default corridor edges: {e}")
 
     def add_edge(
         self,
