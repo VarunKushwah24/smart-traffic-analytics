@@ -1229,18 +1229,22 @@ elif page == "🗺️  Route Optimizer":
         st.markdown("<br>", unsafe_allow_html=True)
 
         # Route segment list
+        # Route segment list
         col_segs, col_alt = st.columns(2, gap="large")
         with col_segs:
             st.markdown("#### ✅ Recommended Route (Dijkstra Optimal)")
             for i, seg in enumerate(opt_route["segments"]):
                 cong = seg.get("congestion_level","LOW")
                 cong_color = {"LOW":"#22c55e","MEDIUM":"#f59e0b","HIGH":"#ef4444","SEVERE":"#b91c1c"}.get(cong,"#64748b")
+                dist_km = float(seg.get('distance_km', 0.0))
+                spd = max(5.0, float(seg.get('current_speed_kmh', 60.0)))
+                time_m = float(seg.get('estimated_time_min', round((dist_km / spd) * 60.0, 1)))
                 st.markdown(f"""
                 <div class="route-seg">
                     <div class="route-num">{i+1}</div>
                     <div>
                         <div class="route-name">{seg.get('road_name','—')}</div>
-                        <div style="font-size:0.76rem;color:#475569;">{seg.get('distance_km','?')} km · {seg.get('estimated_time_min','?')} min</div>
+                        <div style="font-size:0.76rem;color:#94a3b8;"><b style="color:#38bdf8;">{dist_km:.1f} km</b> · <b style="color:#34d399;">{time_m:.1f} min</b> ({int(spd)} km/h)</div>
                     </div>
                     <span class="route-cond" style="background:{cong_color}20;color:{cong_color};border:1px solid {cong_color}50;">
                         {cong}
@@ -1249,16 +1253,20 @@ elif page == "🗺️  Route Optimizer":
 
         with col_alt:
             st.markdown("#### 🔀 Alternative Corridor")
-            if alt_route and alt_route.get("segments"):
+            has_distinct_alt = alt_route and alt_route.get("segments") and (alt_route.get("nodes") != opt_route.get("nodes"))
+            if has_distinct_alt:
                 for i, seg in enumerate(alt_route["segments"]):
                     cong = seg.get("congestion_level","LOW")
                     cong_color = {"LOW":"#22c55e","MEDIUM":"#f59e0b","HIGH":"#ef4444","SEVERE":"#b91c1c"}.get(cong,"#64748b")
+                    dist_km = float(seg.get('distance_km', 0.0))
+                    spd = max(5.0, float(seg.get('current_speed_kmh', 60.0)))
+                    time_m = float(seg.get('estimated_time_min', round((dist_km / spd) * 60.0, 1)))
                     st.markdown(f"""
                     <div class="route-seg" style="border-color:rgba(99,102,241,0.20);">
                         <div class="route-num" style="background:#6366f1;">{i+1}</div>
                         <div>
                             <div class="route-name">{seg.get('road_name','—')}</div>
-                            <div style="font-size:0.76rem;color:#475569;">{seg.get('distance_km','?')} km · {seg.get('estimated_time_min','?')} min</div>
+                            <div style="font-size:0.76rem;color:#94a3b8;"><b style="color:#38bdf8;">{dist_km:.1f} km</b> · <b style="color:#818cf8;">{time_m:.1f} min</b> ({int(spd)} km/h)</div>
                         </div>
                         <span class="route-cond" style="background:{cong_color}20;color:{cong_color};border:1px solid {cong_color}50;">
                             {cong}
@@ -1268,11 +1276,13 @@ elif page == "🗺️  Route Optimizer":
                 st.markdown("<br>", unsafe_allow_html=True)
                 d_time = alt_route["estimated_travel_time_min"] - opt_route["estimated_travel_time_min"]
                 if d_time > 0:
-                    st.info(f"🔀 Alternative is **+{d_time:.1f} min** longer but avoids high-congestion segments.")
+                    st.info(f"🔀 Alternative bypass corridor: **+{d_time:.1f} min** ({alt_route['total_distance_km']:.1f} km vs {opt_route['total_distance_km']:.1f} km).")
+                elif d_time < 0:
+                    st.success(f"🔀 Alternative bypass is **{abs(d_time):.1f} min faster** under current traffic.")
                 else:
-                    st.success(f"🔀 Alternative is **{abs(d_time):.1f} min faster** on current congestion state.")
+                    st.info(f"🔀 Alternative path has comparable duration: {alt_route['estimated_travel_time_min']:.1f} min.")
             else:
-                st.info("No alternative corridor available for this origin-destination pair.")
+                st.info("No distinct alternative corridor found in the network for this origin-destination pair.")
 
         # ── Spatial Map (OpenStreetMap — no API key) ──────────────────────────
         st.markdown("#### 🌐 Spatial Network Map (OpenStreetMap)")
@@ -1281,38 +1291,82 @@ elif page == "🗺️  Route Optimizer":
         all_names= [graph.nodes[k].get("name",k) for k in graph.nodes]
 
         fig_map = go.Figure()
-        # All network nodes
+
+        # 1. Background Grid: Draw all road network corridor edges so topology is visible
+        for u, edges in graph.adjacency.items():
+            u_lat, u_lon = graph.nodes[u]["lat"], graph.nodes[u]["lon"]
+            for e in edges:
+                v = e["target"]
+                v_lat, v_lon = graph.nodes[v]["lat"], graph.nodes[v]["lon"]
+                fig_map.add_trace(go.Scattermap(
+                    lat=[u_lat, v_lat], lon=[u_lon, v_lon],
+                    mode="lines",
+                    line=dict(width=1.5, color="rgba(148, 163, 184, 0.40)"),
+                    hoverinfo="text",
+                    text=f"{e['road_name']} ({e['distance_km']} km)",
+                    showlegend=False
+                ))
+
+        # 2. Alternative route line (if distinct)
+        if has_distinct_alt and alt_route.get("coordinates"):
+            a_lats = [c[0] for c in alt_route["coordinates"]]
+            a_lons = [c[1] for c in alt_route["coordinates"]]
+            alt_hover = "<br>".join([f"{i+1}. {s.get('road_name')}" for i, s in enumerate(alt_route.get("segments",[]))])
+            fig_map.add_trace(go.Scattermap(
+                lat=a_lats, lon=a_lons, mode="lines+markers",
+                line=dict(width=5, color="#818cf8"),
+                marker=dict(size=9, color="#818cf8"),
+                name=f"Alternative Route ({alt_route['estimated_travel_time_min']} min)",
+                hovertemplate=f"<b>Alternative Corridor</b><br>{alt_hover}<extra></extra>",
+            ))
+
+        # 3. Optimal route line
+        if opt_route.get("coordinates"):
+            r_lats = [c[0] for c in opt_route["coordinates"]]
+            r_lons = [c[1] for c in opt_route["coordinates"]]
+            opt_hover = "<br>".join([f"{i+1}. {s.get('road_name')}" for i, s in enumerate(opt_route.get("segments",[]))])
+            fig_map.add_trace(go.Scattermap(
+                lat=r_lats, lon=r_lons, mode="lines+markers",
+                line=dict(width=6, color="#22c55e"),
+                marker=dict(size=12, color="#22c55e"),
+                name=f"Optimal Route ({opt_route['estimated_travel_time_min']} min)",
+                hovertemplate=f"<b>Recommended Route</b><br>{opt_hover}<extra></extra>",
+            ))
+
+        # 4. All network junction nodes
         fig_map.add_trace(go.Scattermap(
             lat=all_lats, lon=all_lons,
             mode="markers+text",
-            marker=dict(size=10, color="#38bdf8", opacity=0.9),
+            marker=dict(size=9, color="#38bdf8", opacity=0.85),
             text=all_names, textposition="top right",
             textfont=dict(color="#f1f5f9", size=10),
             name="Network Junctions",
             hovertemplate="<b>%{text}</b><extra></extra>",
         ))
-        # Optimal route line
-        if opt_route.get("coordinates"):
-            r_lats = [c[0] for c in opt_route["coordinates"]]
-            r_lons = [c[1] for c in opt_route["coordinates"]]
-            fig_map.add_trace(go.Scattermap(
-                lat=r_lats, lon=r_lons, mode="lines+markers",
-                line=dict(width=5, color="#22c55e"),
-                marker=dict(size=12, color="#22c55e"),
-                name="Optimal Route",
-                hovertemplate="Optimal Route<extra></extra>",
-            ))
-        # Alternative route line
-        if alt_route and alt_route.get("coordinates"):
-            a_lats = [c[0] for c in alt_route["coordinates"]]
-            a_lons = [c[1] for c in alt_route["coordinates"]]
-            fig_map.add_trace(go.Scattermap(
-                lat=a_lats, lon=a_lons, mode="lines+markers",
-                line=dict(width=4, color="#818cf8"),
-                marker=dict(size=10, color="#818cf8"),
-                name="Alt Route",
-                hovertemplate="Alternative Route<extra></extra>",
-            ))
+
+        # 5. Start and End Origin/Destination Pins
+        src_coords = graph.nodes[src_sel]
+        tgt_coords = graph.nodes[tgt_sel]
+        fig_map.add_trace(go.Scattermap(
+            lat=[src_coords["lat"]], lon=[src_coords["lon"]],
+            mode="markers+text",
+            marker=dict(size=16, color="#22c55e"),
+            text=[f"🟢 Start: {node_labels.get(src_sel, src_sel)}"],
+            textposition="bottom right",
+            textfont=dict(color="#4ade80", size=11),
+            name="Origin",
+            showlegend=False
+        ))
+        fig_map.add_trace(go.Scattermap(
+            lat=[tgt_coords["lat"]], lon=[tgt_coords["lon"]],
+            mode="markers+text",
+            marker=dict(size=16, color="#ef4444"),
+            text=[f"🏁 Destination: {node_labels.get(tgt_sel, tgt_sel)}"],
+            textposition="bottom right",
+            textfont=dict(color="#f87171", size=11),
+            name="Destination",
+            showlegend=False
+        ))
 
         center_lat = np.mean(all_lats)
         center_lon = np.mean(all_lons)

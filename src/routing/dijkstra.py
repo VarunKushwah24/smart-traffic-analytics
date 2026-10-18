@@ -84,7 +84,12 @@ def dijkstra_shortest_path(
     
     while curr != source:
         prev_node, edge = predecessors[curr]
-        path_edges.append(edge)
+        edge_copy = edge.copy()
+        dist = edge_copy["distance_km"]
+        curr_spd = max(5.0, edge_copy.get("current_speed_kmh", 60.0))
+        edge_copy["estimated_time_min"] = round((dist / curr_spd) * 60.0, 1)
+        edge_copy["free_flow_time_min"] = round((dist / edge_copy.get("speed_limit_kmh", 90.0)) * 60.0, 1)
+        path_edges.append(edge_copy)
         curr = prev_node
         path_nodes.append(curr)
         
@@ -135,25 +140,35 @@ def find_alternative_route(
     alpha: float = 0.50
 ) -> Optional[Dict]:
     """
-    Computes an alternative route by penalizing or excluding the primary bottleneck
+    Computes a distinct alternative route by penalizing or excluding the primary bottleneck
     road segment of the primary path.
     """
     if not primary_route or not primary_route.get("segments"):
         return None
         
-    # Find most congested or longest edge from primary route to exclude
     segments = primary_route["segments"]
-    if len(segments) <= 1:
-        # Distance-only route as fallback alternative
-        return dijkstra_shortest_path(graph, source, destination, mode="distance")
-        
-    # Exclude the bottleneck segment
-    bottleneck_seg = max(segments, key=lambda s: (s["distance_km"] / max(5.0, s["current_speed_kmh"])))
-    excluded = {bottleneck_seg["segment_id"]}
     
+    # Strategy 1: Exclude the critical bottleneck segment (or single direct segment)
+    if len(segments) == 1:
+        excluded = {segments[0]["segment_id"]}
+    else:
+        bottleneck_seg = max(segments, key=lambda s: (s["distance_km"] / max(5.0, s["current_speed_kmh"])))
+        excluded = {bottleneck_seg["segment_id"]}
+        
     alt_route = dijkstra_shortest_path(graph, source, destination, alpha=alpha, mode="dynamic", excluded_edges=excluded)
+    
+    # Strategy 2: If not distinct, exclude all segments of the primary route
     if alt_route is None or alt_route["nodes"] == primary_route["nodes"]:
-        # Fallback to pure distance-based path
-        alt_route = dijkstra_shortest_path(graph, source, destination, mode="distance")
+        all_excluded = {s["segment_id"] for s in segments}
+        alt_route = dijkstra_shortest_path(graph, source, destination, alpha=alpha, mode="dynamic", excluded_edges=all_excluded)
+        
+    # Strategy 3: Try distance mode with excluded edges
+    if alt_route is None or alt_route["nodes"] == primary_route["nodes"]:
+        alt_route = dijkstra_shortest_path(graph, source, destination, mode="distance", excluded_edges=excluded)
+        
+    # If route is still identical to primary, return None so UI correctly reports no alternative corridor
+    if alt_route is not None and alt_route["nodes"] == primary_route["nodes"]:
+        return None
         
     return alt_route
+

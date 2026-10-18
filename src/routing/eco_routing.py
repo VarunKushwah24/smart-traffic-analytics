@@ -211,7 +211,12 @@ def multi_objective_dijkstra(
     
     while curr != source:
         prev_node, edge = predecessors[curr]
-        path_edges.append(edge)
+        edge_copy = edge.copy()
+        dist = edge_copy["distance_km"]
+        curr_spd = max(5.0, edge_copy.get("current_speed_kmh", 60.0))
+        edge_copy["estimated_time_min"] = round((dist / curr_spd) * 60.0, 1)
+        edge_copy["free_flow_time_min"] = round((dist / edge_copy.get("speed_limit_kmh", 90.0)) * 60.0, 1)
+        path_edges.append(edge_copy)
         curr = prev_node
         path_nodes.append(curr)
         
